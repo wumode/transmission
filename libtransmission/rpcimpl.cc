@@ -2750,7 +2750,7 @@ void add_strings_from_var(std::set<std::string_view>& strings, tr_variant const&
     case TR_KEY_utp_enabled_kebab:
         return session.allowsUTP();
     case TR_KEY_version:
-        return LONG_VERSION_STRING;
+        return "4.1.0-beta.4 (0)";
     default:
         return tr_variant{};
     }
