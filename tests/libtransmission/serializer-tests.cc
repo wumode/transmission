@@ -12,17 +12,15 @@
 #include <string_view>
 #include <vector>
 
-#include "gtest/gtest.h"
-
 #include <libtransmission/net.h>
 #include <libtransmission/quark.h>
 #include <libtransmission/serializer.h>
 #include <libtransmission/variant.h>
 
-using SerializerTest = ::testing::Test;
+#include "test-fixtures.h"
 
+using SerializerTest = ::libtransmission::test::TransmissionTest;
 using namespace std::literals;
-
 using libtransmission::serializer::Converters;
 
 namespace
@@ -247,6 +245,52 @@ TEST_F(SerializerTest, vectorIsNondestructiveOnPartialFailure)
     auto out = std::vector<std::string>{ "keep" };
     EXPECT_FALSE(Converters::deserialize(var, &out));
     EXPECT_EQ(out, (std::vector<std::string>{ "keep" }));
+}
+
+TEST_F(SerializerTest, usesOptional)
+{
+    auto const expected = std::optional{ "apple"s };
+    auto const var = Converters::serialize(expected);
+
+    auto const sv = var.value_if<std::string_view>();
+    ASSERT_EQ(sv, "apple"sv);
+
+    auto actual = decltype(expected){};
+    EXPECT_TRUE(Converters::deserialize(var, &actual));
+    EXPECT_EQ(actual, expected);
+}
+
+TEST_F(SerializerTest, usesNullOptional)
+{
+    auto const expected = std::optional<std::string>{};
+    auto const var = Converters::serialize(expected);
+
+    auto const sv = var.value_if<std::string_view>();
+    ASSERT_FALSE(sv);
+
+    auto actual = decltype(expected){ "discard"s };
+    EXPECT_TRUE(Converters::deserialize(var, &actual));
+    EXPECT_EQ(actual, expected);
+}
+
+TEST_F(SerializerTest, usesOptionalOfCustom)
+{
+    registerRectConverter();
+
+    constexpr auto Expected = std::optional{ Rect{ 1, 2, 3, 4 } };
+    auto const var = Converters::serialize(Expected);
+
+    auto actual = decltype(Expected){};
+    EXPECT_TRUE(Converters::deserialize(var, &actual));
+    EXPECT_EQ(actual, Expected);
+}
+
+TEST_F(SerializerTest, optionalRejectsWrongType)
+{
+    auto const var = tr_variant{ true };
+    auto out = std::optional{ "keep"s };
+    EXPECT_FALSE(Converters::deserialize(var, &out));
+    EXPECT_EQ(out, "keep"s);
 }
 
 // ---

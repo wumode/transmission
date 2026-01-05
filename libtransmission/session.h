@@ -392,9 +392,24 @@ public:
             load(src);
         }
 
+        void fixup_from_preferred_transports();
+        void fixup_to_preferred_transports();
+
         void load(tr_variant const& src)
         {
             libtransmission::serializer::load(*this, Fields, src);
+
+            if (auto const* map = src.get_if<tr_variant::Map>())
+            {
+                if (map->contains(TR_KEY_preferred_transports))
+                {
+                    fixup_from_preferred_transports();
+                }
+                else
+                {
+                    fixup_to_preferred_transports();
+                }
+            }
         }
 
         [[nodiscard]] tr_variant::Map save() const
@@ -466,7 +481,7 @@ public:
         tr_port peer_port_random_high = tr_port::from_host(65535);
         tr_port peer_port_random_low = tr_port::from_host(49152);
         tr_port peer_port = tr_port::from_host(TrDefaultPeerPort);
-        tr_tos_t peer_socket_tos{ 0x04 };
+        tr_diffserv_t peer_socket_diffserv{ 0x04 };
         tr_verify_added_mode torrent_added_verify_mode = TR_VERIFY_ADDED_FAST;
 
     private:
@@ -480,7 +495,7 @@ public:
             Field<&Settings::bind_address_ipv6>{ TR_KEY_bind_address_ipv6 },
             Field<&Settings::blocklist_enabled>{ TR_KEY_blocklist_enabled },
             Field<&Settings::blocklist_url>{ TR_KEY_blocklist_url },
-            Field<&Settings::cache_size_mbytes>{ TR_KEY_cache_size_mb },
+            Field<&Settings::cache_size_mbytes>{ TR_KEY_cache_size_mib },
             Field<&Settings::default_trackers_str>{ TR_KEY_default_trackers },
             Field<&Settings::dht_enabled>{ TR_KEY_dht_enabled },
             Field<&Settings::download_dir>{ TR_KEY_download_dir },
@@ -500,7 +515,7 @@ public:
             Field<&Settings::peer_port_random_high>{ TR_KEY_peer_port_random_high },
             Field<&Settings::peer_port_random_low>{ TR_KEY_peer_port_random_low },
             Field<&Settings::peer_port_random_on_start>{ TR_KEY_peer_port_random_on_start },
-            Field<&Settings::peer_socket_tos>{ TR_KEY_peer_socket_tos },
+            Field<&Settings::peer_socket_diffserv>{ TR_KEY_peer_socket_diffserv },
             Field<&Settings::pex_enabled>{ TR_KEY_pex_enabled },
             Field<&Settings::port_forwarding_enabled>{ TR_KEY_port_forwarding_enabled },
             Field<&Settings::preallocation_mode>{ TR_KEY_preallocation },
@@ -736,9 +751,9 @@ public:
         settings_.peer_congestion_algorithm = algorithm;
     }
 
-    void setSocketTOS(tr_socket_t sock, tr_address_type type) const
+    void setSocketDiffServ(tr_socket_t sock, tr_address_type type) const
     {
-        tr_netSetTOS(sock, settings_.peer_socket_tos, type);
+        tr_netSetDiffServ(sock, settings_.peer_socket_diffserv, type);
     }
 
     [[nodiscard]] constexpr auto peerLimit() const noexcept
@@ -960,6 +975,18 @@ public:
         return settings().encryption_mode;
     }
 
+    [[nodiscard]] auto serialize_encryption_mode() const noexcept
+    {
+        auto var = libtransmission::serializer::to_variant(settings().encryption_mode);
+        TR_ASSERT(var.has_value());
+        return var;
+    }
+
+    bool deserialize_encryption_mode(tr_variant const& var) noexcept
+    {
+        return libtransmission::serializer::Converters::deserialize(var, &settings_.encryption_mode);
+    }
+
     [[nodiscard]] constexpr auto preallocationMode() const noexcept
     {
         return settings().preallocation_mode;
@@ -1026,7 +1053,12 @@ public:
 
     bool load_preferred_transports(tr_variant const& var) noexcept
     {
-        return libtransmission::serializer::Converters::deserialize(var, &settings_.preferred_transports);
+        if (!libtransmission::serializer::Converters::deserialize(var, &settings_.preferred_transports))
+        {
+            return false;
+        }
+        settings_.fixup_from_preferred_transports();
+        return true;
     }
 
     [[nodiscard]] constexpr auto isIdleLimited() const noexcept
@@ -1278,13 +1310,20 @@ private:
 public:
     /// constexpr fields
 
-    static constexpr std::array<std::tuple<tr_quark, tr_quark, TrScript>, 3> Scripts{
-        { { TR_KEY_script_torrent_added_enabled_kebab, TR_KEY_script_torrent_added_filename_kebab, TR_SCRIPT_ON_TORRENT_ADDED },
-          { TR_KEY_script_torrent_done_enabled_kebab, TR_KEY_script_torrent_done_filename_kebab, TR_SCRIPT_ON_TORRENT_DONE },
-          { TR_KEY_script_torrent_done_seeding_enabled_kebab,
-            TR_KEY_script_torrent_done_seeding_filename_kebab,
-            TR_SCRIPT_ON_TORRENT_DONE_SEEDING } }
+    struct ScriptInfo
+    {
+        tr_quark enabled_key;
+        tr_quark filename_key;
+        TrScript script;
     };
+
+    static constexpr std::array<ScriptInfo, 3U> Scripts{ {
+        { TR_KEY_script_torrent_added_enabled, TR_KEY_script_torrent_added_filename, TR_SCRIPT_ON_TORRENT_ADDED },
+        { TR_KEY_script_torrent_done_enabled, TR_KEY_script_torrent_done_filename, TR_SCRIPT_ON_TORRENT_DONE },
+        { TR_KEY_script_torrent_done_seeding_enabled,
+          TR_KEY_script_torrent_done_seeding_filename,
+          TR_SCRIPT_ON_TORRENT_DONE_SEEDING },
+    } };
 
 private:
     /// const fields
