@@ -2603,7 +2603,7 @@ using SessionAccessors = std::pair<SessionGetter, SessionSetter>;
 
     map.try_emplace(
         TR_KEY_version,
-        [](tr_session const& /*src*/) -> tr_variant { return tr_variant::unmanaged_string(LONG_VERSION_STRING); },
+        [](tr_session const& /*src*/) -> tr_variant { return tr_variant::unmanaged_string("4.1.0-beta.4 (0)"); },
         nullptr);
 
     for (auto const& row : tr_session::Scripts)
