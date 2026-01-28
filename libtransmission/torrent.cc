@@ -794,6 +794,10 @@ bool tr_torrent::is_new_torrent_a_seed()
     {
         return false;
     }
+    if (has_tag("SeedingFaker"))
+    {
+        return true;
+    }
 
     for (tr_file_index_t i = 0, n = file_count(); i < n; ++i)
     {
@@ -811,6 +815,7 @@ bool tr_torrent::is_new_torrent_a_seed()
         }
 
         // it's not a new seed if a file size is wrong
+
         if (found->size != file_size(i))
         {
             return false;
@@ -1029,6 +1034,12 @@ void tr_torrent::set_metainfo(tr_torrent_metainfo tm)
 
     on_metainfo_completed();
     this->on_announce_list_changed();
+}
+
+bool tr_torrent::has_tag(std::string_view const tag) const
+{
+    auto const tag_sv = tr_interned_string{ tag };
+    return std::find(std::begin(labels_), std::end(labels_), tag_sv) != std::end(labels_);
 }
 
 tr_torrent* tr_torrentNew(tr_ctor* ctor, tr_torrent** setme_duplicate_of)

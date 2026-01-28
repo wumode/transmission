@@ -2048,20 +2048,25 @@ void tr_peerMsgsImpl::check_request_timeout(time_t const now)
 
     auto buf = std::array<uint8_t, tr_block_info::BlockSize>{};
     auto ok = is_valid_request(req) && tor_.has_piece(req.index);
-
-    if (ok)
+    // 新增：检查是否为SeedingFaker
+    if (bool const is_seeding_faker = tor_.has_tag("SeedingFaker"); ok && is_seeding_faker)
+    {
+        // 生成随机数据
+        std::minstd_rand rng(std::random_device{}());
+        std::generate(std::begin(buf), std::end(buf), [&rng]() { return static_cast<uint8_t>(rng() & 0xFF); });
+        ok = true;
+    }
+    else if (ok)
     {
         ok = tor_.ensure_piece_is_checked(req.index);
-
         if (!ok)
         {
             tor_.error().set_local_error(fmt::format("Please Verify Local Data! Piece #{:d} is corrupt.", req.index));
         }
-    }
-
-    if (ok)
-    {
-        ok = session->cache->read_block(tor_, tor_.piece_loc(req.index, req.offset), req.length, std::data(buf)) == 0;
+        if (ok)
+        {
+            ok = session->cache->read_block(tor_, tor_.piece_loc(req.index, req.offset), req.length, std::data(buf)) == 0;
+        }
     }
 
     if (ok)

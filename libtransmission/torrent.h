@@ -303,6 +303,7 @@ struct tr_torrent
     [[nodiscard]] tr_block_span_t block_span_for_file(tr_file_index_t file) const noexcept;
 
     /// COMPLETION
+    [[nodiscard]] bool has_tag(std::string_view tag) const;
 
     [[nodiscard]] auto left_until_done() const
     {
